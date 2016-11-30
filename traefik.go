@@ -10,13 +10,13 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"text/template"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/containous/flaeg"
 	"github.com/containous/staert"
 	"github.com/containous/traefik/acme"
 	"github.com/containous/traefik/cluster"
+	"github.com/containous/traefik/cmd"
 	"github.com/containous/traefik/log"
 	"github.com/containous/traefik/middlewares"
 	"github.com/containous/traefik/provider"
@@ -25,12 +25,6 @@ import (
 	"github.com/docker/libkv/store"
 	"github.com/satori/go.uuid"
 )
-
-var versionTemplate = `Version:      {{.Version}}
-Codename:     {{.Codename}}
-Go version:   {{.GoVersion}}
-Built:        {{.BuildTime}}
-OS/Arch:      {{.Os}}/{{.Arch}}`
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -48,43 +42,6 @@ Complete documentation is available at https://traefik.io`,
 		Run: func() error {
 			run(traefikConfiguration)
 			return nil
-		},
-	}
-
-	//version Command init
-	versionCmd := &flaeg.Command{
-		Name:                  "version",
-		Description:           `Print version`,
-		Config:                struct{}{},
-		DefaultPointersConfig: struct{}{},
-		Run: func() error {
-			tmpl, err := template.New("").Parse(versionTemplate)
-			if err != nil {
-				return err
-			}
-
-			v := struct {
-				Version   string
-				Codename  string
-				GoVersion string
-				BuildTime string
-				Os        string
-				Arch      string
-			}{
-				Version:   version.Version,
-				Codename:  version.Codename,
-				GoVersion: runtime.Version(),
-				BuildTime: version.BuildDate,
-				Os:        runtime.GOOS,
-				Arch:      runtime.GOARCH,
-			}
-
-			if err := tmpl.Execute(os.Stdout, v); err != nil {
-				return err
-			}
-			fmt.Printf("\n")
-			return nil
-
 		},
 	}
 
@@ -138,6 +95,10 @@ Complete documentation is available at https://traefik.io`,
 		},
 	}
 
+	bugCmd := cmd.NewBugCmd(func() interface{} {
+		return traefikConfiguration
+	})
+
 	//init flaeg source
 	f := flaeg.New(traefikCmd, os.Args[1:])
 	//add custom parsers
@@ -148,7 +109,8 @@ Complete documentation is available at https://traefik.io`,
 	f.AddParser(reflect.TypeOf([]acme.Domain{}), &acme.Domains{})
 
 	//add commands
-	f.AddCommand(versionCmd)
+	f.AddCommand(cmd.NewVersionCmd())
+	f.AddCommand(bugCmd)
 	f.AddCommand(storeconfigCmd)
 
 	usedCmd, err := f.GetCommand()
